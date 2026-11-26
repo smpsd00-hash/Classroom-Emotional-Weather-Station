@@ -1,0 +1,1121 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>班級情緒氣象站 — 互動情緒量表</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts: Noto Sans TC & Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700&family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet" />
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Noto Sans TC"', 'Inter', 'sans-serif'],
+          },
+          colors: {
+            cream: '#FDF8EE',
+            paper: '#FFFDF8',
+            'mood-red': '#FF6B5B',
+            'mood-red-light': '#FFE4DF',
+            'mood-yellow': '#FFD24C',
+            'mood-yellow-light': '#FFF5D1',
+            'mood-blue': '#64A6FF',
+            'mood-blue-light': '#E1EEFF',
+            'mood-green': '#5ED382',
+            'mood-green-light': '#DFF8E7',
+          }
+        }
+      }
+    };
+  </script>
+
+  <style>
+    /* 柔和的背景與流暢互動微動畫 */
+    body {
+      background-color: #FDF8EE;
+      color: #2D2A26;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+
+    /* 情緒按鈕點擊彈跳效果 */
+    @keyframes popIn {
+      0% { transform: scale(1); }
+      40% { transform: scale(0.91); }
+      75% { transform: scale(1.06); }
+      100% { transform: scale(1); }
+    }
+    .animate-pop {
+      animation: popIn 0.32s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    /* 飄浮 +1 動畫 */
+    @keyframes floatUp {
+      0% { opacity: 1; transform: translate(-50%, 0) scale(0.9); }
+      100% { opacity: 0; transform: translate(-50%, -36px) scale(1.25); }
+    }
+    .float-plus {
+      position: fixed;
+      pointer-events: none;
+      z-index: 60;
+      font-weight: 900;
+      font-size: 1.5rem;
+      animation: floatUp 0.75s ease-out forwards;
+      text-shadow: 0 2px 8px rgba(255,255,255,0.9);
+    }
+
+    /* 彈窗進場 */
+    @keyframes modalShow {
+      from { opacity: 0; transform: scale(0.95) translateY(8px); }
+      to { opacity: 1; transform: scale(1) translateY(0); }
+    }
+    .modal-animate {
+      animation: modalShow 0.25s ease-out forwards;
+    }
+
+    /* 列印時只顯示報告內容 */
+    @media print {
+      body * { visibility: hidden; }
+      #reportModalContent, #reportModalContent * { visibility: visible; }
+      #reportModalContent {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        box-shadow: none !important;
+        max-height: none !important;
+        overflow: visible !important;
+      }
+      .no-print { display: none !important; }
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col font-sans">
+
+  <!-- 頂部導覽與工具列 -->
+  <header class="bg-paper/90 backdrop-blur-md border-b border-amber-200/70 sticky top-0 z-30 shadow-sm">
+    <div class="max-w-[1600px] mx-auto px-3 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-3">
+      <!-- 標題區 -->
+      <div class="flex items-center gap-3">
+        <div class="w-11 h-11 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-400 flex items-center justify-center shadow-sm text-white shrink-0">
+          <!-- 心形微笑圖示 -->
+          <svg class="w-7 h-7" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 20.5s-7.5-4.8-9.3-9.2C1.2 7.6 3.8 4 7.5 4c2.1 0 3.7 1.2 4.5 2.6C12.8 5.2 14.4 4 16.5 4c3.7 0 6.3 3.6 4.8 7.3-1.8 4.4-9.3 9.2-9.3 9.2z"/>
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9.5 11.5s1 1.5 2.5 1.5 2.5-1.5 2.5-1.5"/>
+          </svg>
+        </div>
+        <div>
+          <div class="flex items-center gap-2 flex-wrap">
+            <h1 class="text-xl sm:text-2xl font-black tracking-tight text-stone-800">班級情緒氣象站</h1>
+            <span class="text-xs font-bold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">Mood Meter 情緒量表</span>
+          </div>
+          <p class="text-xs sm:text-sm text-stone-500 mt-0.5">
+            請小朋友點選最符合現在心情的格子｜<span id="todayDate" class="font-medium text-stone-600"></span>
+          </p>
+        </div>
+      </div>
+
+      <!-- 教師快捷控制按鈕 -->
+      <div class="flex items-center gap-2 flex-wrap">
+        <!-- 音效開關 -->
+        <button id="btnToggleSound" onclick="toggleSound()" class="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-bold bg-stone-100 hover:bg-stone-200 text-stone-700 transition active:scale-95" title="切換點擊音效">
+          <span id="soundIcon">🔊</span>
+          <span class="hidden sm:inline">音效</span>
+        </button>
+
+        <!-- 顯示格上票數開關 -->
+        <button id="btnToggleBadges" onclick="toggleBadges()" class="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-bold bg-stone-100 hover:bg-stone-200 text-stone-700 transition active:scale-95" title="顯示或隱藏格子上的累計人數">
+          <span id="badgeToggleIcon">👁️</span>
+          <span class="hidden md:inline">顯示票數</span>
+        </button>
+
+        <!-- 復原上一筆 -->
+        <button id="btnUndo" onclick="undoLast()" disabled class="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-bold bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 transition active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed">
+          <span>↩️</span>
+          <span>復原</span>
+        </button>
+
+        <!-- 重新統計 -->
+        <button onclick="openResetModal()" class="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-bold bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 transition active:scale-95">
+          <span>🗑️</span>
+          <span>清空</span>
+        </button>
+
+        <!-- 全螢幕切換（大螢幕教室專用） -->
+        <button onclick="toggleFullscreen()" class="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-bold bg-stone-800 hover:bg-stone-700 text-white transition active:scale-95" title="切換大螢幕全螢幕模式">
+          <span>⛶</span>
+          <span class="hidden sm:inline">全螢幕</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- 主要內容區：左（大面積互動情緒量表）＋ 右（即時統計長條圖與報告入口） -->
+  <main class="flex-1 max-w-[1600px] w-full mx-auto px-3 sm:px-6 py-4 sm:py-5 grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+
+    <!-- 左側：情緒量表四象限互動板 (佔 8 欄) -->
+    <section class="lg:col-span-8 bg-paper rounded-3xl shadow-md border border-amber-200/80 p-3 sm:p-5 relative">
+      <!-- 上方：高能量指標 -->
+      <div class="flex justify-center mb-3">
+        <div class="inline-flex items-center gap-1.5 px-4 py-1 rounded-full bg-amber-500 text-white font-bold text-xs sm:text-sm shadow-sm">
+          <span>▲</span>
+          <span>高能量 High Energy</span>
+        </div>
+      </div>
+
+      <!-- 四象限網格容器 -->
+      <div class="relative">
+        <!-- 兩大列（高能量列 / 低能量列） -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
+
+          <!-- 1. 紅色象限：高能量・不舒服 -->
+          <div class="bg-mood-red rounded-2xl p-2.5 sm:p-3 shadow-inner flex flex-col">
+            <div class="flex items-center justify-between px-1 mb-2">
+              <span class="text-xs sm:text-sm font-black text-white tracking-wide drop-shadow-sm">高能量・不舒服</span>
+              <span id="quadBadge-red" class="text-xs font-bold bg-white/25 text-white px-2 py-0.5 rounded-full">0 人</span>
+            </div>
+            <div id="grid-red" class="grid grid-cols-4 gap-1.5 sm:gap-2 flex-1"></div>
+          </div>
+
+          <!-- 2. 黃色象限：高能量・舒服 -->
+          <div class="bg-mood-yellow rounded-2xl p-2.5 sm:p-3 shadow-inner flex flex-col">
+            <div class="flex items-center justify-between px-1 mb-2">
+              <span class="text-xs sm:text-sm font-black text-amber-950 tracking-wide">高能量・舒服</span>
+              <span id="quadBadge-yellow" class="text-xs font-bold bg-amber-950/15 text-amber-950 px-2 py-0.5 rounded-full">0 人</span>
+            </div>
+            <div id="grid-yellow" class="grid grid-cols-4 gap-1.5 sm:gap-2 flex-1"></div>
+          </div>
+
+        </div>
+
+        <!-- 中間橫軸：不舒服 ←→ 舒服 -->
+        <div class="flex items-center justify-between gap-2 my-3 px-1">
+          <div class="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-purple-700 text-white text-xs font-bold shadow-sm">
+            <span>◀</span>
+            <span>不舒服 Low Pleasantness</span>
+          </div>
+          <div class="flex-1 h-1 bg-stone-300/80 rounded-full"></div>
+          <div class="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-emerald-600 text-white text-xs font-bold shadow-sm">
+            <span>舒服 High Pleasantness</span>
+            <span>▶</span>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
+
+          <!-- 3. 藍色象限：低能量・不舒服 -->
+          <div class="bg-mood-blue rounded-2xl p-2.5 sm:p-3 shadow-inner flex flex-col">
+            <div class="flex items-center justify-between px-1 mb-2">
+              <span class="text-xs sm:text-sm font-black text-white tracking-wide drop-shadow-sm">低能量・不舒服</span>
+              <span id="quadBadge-blue" class="text-xs font-bold bg-white/25 text-white px-2 py-0.5 rounded-full">0 人</span>
+            </div>
+            <div id="grid-blue" class="grid grid-cols-4 gap-1.5 sm:gap-2 flex-1"></div>
+          </div>
+
+          <!-- 4. 綠色象限：低能量・舒服 -->
+          <div class="bg-mood-green rounded-2xl p-2.5 sm:p-3 shadow-inner flex flex-col">
+            <div class="flex items-center justify-between px-1 mb-2">
+              <span class="text-xs sm:text-sm font-black text-emerald-950 tracking-wide">低能量・舒服</span>
+              <span id="quadBadge-green" class="text-xs font-bold bg-emerald-950/15 text-emerald-950 px-2 py-0.5 rounded-full">0 人</span>
+            </div>
+            <div id="grid-green" class="grid grid-cols-4 gap-1.5 sm:gap-2 flex-1"></div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- 下方：低能量指標與出處 -->
+      <div class="flex flex-col sm:flex-row items-center justify-between gap-2 mt-3 pt-1">
+        <div class="text-[11px] text-stone-400">節錄自《讓感受自由》By Marc Brackett, 2019</div>
+        <div class="inline-flex items-center gap-1.5 px-4 py-1 rounded-full bg-sky-600 text-white font-bold text-xs sm:text-sm shadow-sm">
+          <span>▼</span>
+          <span>低能量 Low Energy</span>
+        </div>
+        <div class="text-[11px] text-stone-400">點選任一情緒格即可完成打卡</div>
+      </div>
+    </section>
+
+    <!-- 右側：即時統計長條圖與綜合報告面板 (佔 4 欄) -->
+    <aside class="lg:col-span-4 flex flex-col gap-4">
+
+      <!-- 總打卡人數與即時回饋卡片 -->
+      <div class="bg-paper rounded-3xl shadow-md border border-amber-200/80 p-5">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-lg font-black text-stone-800 flex items-center gap-2">
+            <span>📊</span> 四色情緒統計
+          </h2>
+          <div class="flex items-baseline gap-1 bg-amber-100/80 px-3.5 py-1 rounded-2xl border border-amber-200">
+            <span class="text-xs font-bold text-amber-900">已打卡</span>
+            <span id="totalCountDisplay" class="text-2xl font-black text-amber-700">0</span>
+            <span class="text-xs font-bold text-amber-900">人次</span>
+          </div>
+        </div>
+
+        <!-- 垂直長條圖（大螢幕視覺化重點） -->
+        <div class="bg-cream/80 rounded-2xl p-4 border border-amber-100 mb-4">
+          <div class="h-52 flex items-end justify-around gap-3 sm:gap-4 pt-6 pb-2 border-b-2 border-stone-200">
+            <!-- 紅條 -->
+            <div class="flex-1 flex flex-col items-center h-full justify-end">
+              <div id="barVal-red" class="text-sm font-black text-rose-600 mb-1">0</div>
+              <div class="w-full max-w-[56px] bg-rose-100 rounded-t-xl h-full flex items-end overflow-hidden relative">
+                <div id="barFill-red" class="w-full bg-gradient-to-t from-rose-500 to-mood-red rounded-t-xl transition-all duration-500 ease-out" style="height: 0%"></div>
+              </div>
+            </div>
+            <!-- 黃條 -->
+            <div class="flex-1 flex flex-col items-center h-full justify-end">
+              <div id="barVal-yellow" class="text-sm font-black text-amber-600 mb-1">0</div>
+              <div class="w-full max-w-[56px] bg-amber-100 rounded-t-xl h-full flex items-end overflow-hidden relative">
+                <div id="barFill-yellow" class="w-full bg-gradient-to-t from-amber-400 to-mood-yellow rounded-t-xl transition-all duration-500 ease-out" style="height: 0%"></div>
+              </div>
+            </div>
+            <!-- 藍條 -->
+            <div class="flex-1 flex flex-col items-center h-full justify-end">
+              <div id="barVal-blue" class="text-sm font-black text-blue-600 mb-1">0</div>
+              <div class="w-full max-w-[56px] bg-blue-100 rounded-t-xl h-full flex items-end overflow-hidden relative">
+                <div id="barFill-blue" class="w-full bg-gradient-to-t from-blue-500 to-mood-blue rounded-t-xl transition-all duration-500 ease-out" style="height: 0%"></div>
+              </div>
+            </div>
+            <!-- 綠條 -->
+            <div class="flex-1 flex flex-col items-center h-full justify-end">
+              <div id="barVal-green" class="text-sm font-black text-emerald-600 mb-1">0</div>
+              <div class="w-full max-w-[56px] bg-emerald-100 rounded-t-xl h-full flex items-end overflow-hidden relative">
+                <div id="barFill-green" class="w-full bg-gradient-to-t from-emerald-500 to-mood-green rounded-t-xl transition-all duration-500 ease-out" style="height: 0%"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 長條圖底部標籤與百分比 -->
+          <div class="grid grid-cols-4 gap-2 text-center mt-2.5">
+            <div>
+              <div class="text-xs font-black text-rose-600">紅區</div>
+              <div class="text-[10px] text-stone-500 leading-tight">高能不舒服</div>
+              <div id="barPct-red" class="text-xs font-bold text-stone-700 mt-0.5">0%</div>
+            </div>
+            <div>
+              <div class="text-xs font-black text-amber-600">黃區</div>
+              <div class="text-[10px] text-stone-500 leading-tight">高能舒服</div>
+              <div id="barPct-yellow" class="text-xs font-bold text-stone-700 mt-0.5">0%</div>
+            </div>
+            <div>
+              <div class="text-xs font-black text-blue-600">藍區</div>
+              <div class="text-[10px] text-stone-500 leading-tight">低能不舒服</div>
+              <div id="barPct-blue" class="text-xs font-bold text-stone-700 mt-0.5">0%</div>
+            </div>
+            <div>
+              <div class="text-xs font-black text-emerald-600">綠區</div>
+              <div class="text-[10px] text-stone-500 leading-tight">低能舒服</div>
+              <div id="barPct-green" class="text-xs font-bold text-stone-700 mt-0.5">0%</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 熱門情緒排行榜（即時 Top 3） -->
+        <div class="mb-4">
+          <h3 class="text-xs font-bold text-stone-500 uppercase tracking-wider mb-2">目前最多小朋友選擇的心情</h3>
+          <div id="topEmotionsPreview" class="flex flex-wrap gap-2 min-h-[34px]">
+            <span class="text-sm text-stone-400 italic">尚未有小朋友點選，快來打卡吧！</span>
+          </div>
+        </div>
+
+        <!-- 產生綜合報告按鈕 -->
+        <button onclick="openReportModal()" class="w-full py-3.5 px-5 rounded-2xl bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 hover:from-amber-600 hover:to-rose-600 text-white font-black text-base sm:text-lg shadow-lg shadow-orange-200 flex items-center justify-center gap-2 transition transform active:scale-[0.98]">
+          <span>📋</span>
+          <span>生成班級整體綜合報告</span>
+        </button>
+      </div>
+
+      <!-- 班級小提醒：能量高低的生理狀態與探索步驟（呼應原圖下方） -->
+      <div class="bg-paper rounded-3xl shadow-sm border border-amber-200/80 p-4 text-sm">
+        <div class="font-black text-stone-700 mb-2 flex items-center gap-1.5">
+          <span>🌈</span> 探索你的情緒三步驟
+        </div>
+        <ol class="space-y-1.5 text-stone-600 text-xs sm:text-sm list-decimal list-inside">
+          <li><strong class="text-stone-800">覺察：</strong>現在身體有什麼感覺？（心跳快慢、想動或想安靜）</li>
+          <li><strong class="text-stone-800">命名：</strong>在量表中找到最貼切的詞彙並點一下。</li>
+          <li><strong class="text-stone-800">接納：</strong>每一種情緒都是重要的訊號，沒有好壞之分。</li>
+        </ol>
+      </div>
+
+    </aside>
+  </main>
+
+  <!-- 底部浮動回饋提示條 (Toast) -->
+  <div id="toastBanner" class="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 pointer-events-none opacity-0 translate-y-4 transition-all duration-300">
+    <div id="toastInner" class="px-5 py-3 rounded-2xl shadow-xl border-2 bg-white text-stone-800 font-bold text-sm sm:text-base flex items-center gap-2.5 whitespace-nowrap">
+      <span id="toastEmoji" class="text-xl">✨</span>
+      <span id="toastText">已記錄！</span>
+    </div>
+  </div>
+
+  <!-- 班級整體綜合報告彈窗 -->
+  <div id="reportModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-stone-900/50 backdrop-blur-sm p-3 sm:p-6">
+    <div id="reportModalContent" class="bg-paper w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-3xl shadow-2xl border border-amber-200 modal-animate">
+      <!-- 報告標頭 -->
+      <div class="sticky top-0 bg-paper/95 backdrop-blur border-b border-amber-200/80 px-6 py-4 flex items-center justify-between z-10">
+        <div>
+          <h2 class="text-xl sm:text-2xl font-black text-stone-800 flex items-center gap-2">
+            <span>🌤️</span> 班級情緒整體綜合報告
+          </h2>
+          <p id="reportTimestamp" class="text-xs text-stone-500 mt-0.5"></p>
+        </div>
+        <button onclick="closeReportModal()" class="no-print w-10 h-10 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-600 font-bold text-lg flex items-center justify-center transition">
+          ✕
+        </button>
+      </div>
+
+      <!-- 報告主體 -->
+      <div id="reportBody" class="p-6 space-y-6">
+        <!-- 由 JS 動態生成內容 -->
+      </div>
+
+      <!-- 報告底部按鈕列 -->
+      <div class="no-print sticky bottom-0 bg-cream/95 backdrop-blur border-t border-amber-200/80 px-6 py-4 flex flex-wrap items-center justify-between gap-3">
+        <div class="flex items-center gap-2">
+          <button onclick="copyReportText()" class="px-4 py-2.5 rounded-xl bg-white hover:bg-stone-100 border border-stone-300 text-stone-700 font-bold text-sm flex items-center gap-1.5 transition active:scale-95">
+            <span>📋</span> 複製文字摘要
+          </button>
+          <button onclick="window.print()" class="px-4 py-2.5 rounded-xl bg-white hover:bg-stone-100 border border-stone-300 text-stone-700 font-bold text-sm flex items-center gap-1.5 transition active:scale-95">
+            <span>🖨️</span> 列印 / 存成 PDF
+          </button>
+        </div>
+        <button onclick="closeReportModal()" class="px-6 py-2.5 rounded-xl bg-stone-800 hover:bg-stone-700 text-white font-bold text-sm transition active:scale-95">
+          返回量表
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 清空資料確認彈窗 (取代瀏覽器原生 confirm) -->
+  <div id="resetModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-stone-900/50 backdrop-blur-sm p-4">
+    <div class="bg-paper w-full max-w-md rounded-3xl shadow-2xl border border-rose-200 p-6 modal-animate text-center">
+      <div class="w-14 h-14 mx-auto rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center text-3xl mb-3">
+        🧹
+      </div>
+      <h3 class="text-xl font-black text-stone-800 mb-2">確定要清空今天的統計嗎？</h3>
+      <p class="text-sm text-stone-500 mb-6">
+        清空後，目前累計的 <strong id="resetCountHint" class="text-rose-600">0</strong> 筆情緒紀錄將會歸零，適合在下一堂課或隔天重新開始使用。
+      </p>
+      <div class="flex items-center justify-center gap-3">
+        <button onclick="closeResetModal()" class="flex-1 py-3 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 font-bold transition">
+          先不要
+        </button>
+        <button onclick="confirmReset()" class="flex-1 py-3 rounded-xl bg-rose-500 hover:bg-rose-600 text-white font-bold shadow-md transition">
+          確定清空
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /**
+     * 完整 64 種情緒資料定義（100% 對應上傳之情緒量表圖卡）
+     */
+    const MOOD_DATA = {
+      red: {
+        name: '紅色區（高能量・不舒服）',
+        shortName: '紅區',
+        colorHex: '#FF6B5B',
+        tileBg: 'bg-mood-red-light hover:bg-white',
+        tileText: 'text-stone-900',
+        tileSub: 'text-rose-800/80',
+        badgeBg: 'bg-rose-600 text-white',
+        emotions: [
+          { zh: '抓狂', en: 'Livid' },       { zh: '驚嚇', en: 'Frightened' }, { zh: '慌張', en: 'Panicked' },    { zh: '驚訝', en: 'Surprised' },
+          { zh: '憤怒', en: 'Enraged' },     { zh: '煩躁', en: 'Annoyed' },    { zh: '生氣', en: 'Angry' },       { zh: '緊張', en: 'Nervous' },
+          { zh: '恐懼', en: 'Terrified' },   { zh: '嫉妒', en: 'Jealous' },    { zh: '錯愕', en: 'Stunned' },     { zh: '不安', en: 'Uneasy' },
+          { zh: '焦慮', en: 'Anxious' },     { zh: '尷尬', en: 'Embarrassed' },{ zh: '擔心', en: 'Worried' },     { zh: '害怕', en: 'Afraid' }
+        ]
+      },
+      yellow: {
+        name: '黃色區（高能量・舒服）',
+        shortName: '黃區',
+        colorHex: '#FFD24C',
+        tileBg: 'bg-mood-yellow-light hover:bg-white',
+        tileText: 'text-stone-900',
+        tileSub: 'text-amber-900/80',
+        badgeBg: 'bg-amber-600 text-white',
+        emotions: [
+          { zh: '激動', en: 'Exhilarated' }, { zh: '驚喜', en: 'Amazed' },     { zh: '興奮', en: 'Excited' },     { zh: '狂喜', en: 'Ecstatic' },
+          { zh: '期待', en: 'Eager' },       { zh: '希望', en: 'Hopeful' },    { zh: '快樂', en: 'Happy' },       { zh: '熱情', en: 'Passionate' },
+          { zh: '好奇', en: 'Curious' },     { zh: '驕傲', en: 'Proud' },      { zh: '好玩', en: 'Playful' },     { zh: '幸福', en: 'Blissful' },
+          { zh: '啟發', en: 'Inspired' },    { zh: '得意', en: 'Triumphant' }, { zh: '樂觀', en: 'Optimistic' },  { zh: '愉悅', en: 'Cheerful' }
+        ]
+      },
+      blue: {
+        name: '藍色區（低能量・不舒服）',
+        shortName: '藍區',
+        colorHex: '#64A6FF',
+        tileBg: 'bg-mood-blue-light hover:bg-white',
+        tileText: 'text-stone-900',
+        tileSub: 'text-blue-900/80',
+        badgeBg: 'bg-blue-600 text-white',
+        emotions: [
+          { zh: '噁心', en: 'Disgusted' },   { zh: '沮喪', en: 'Discouraged' },{ zh: '愧疚', en: 'Remorseful' },  { zh: '羨慕', en: 'Envious' },
+          { zh: '憂鬱', en: 'Depressed' },   { zh: '難過', en: 'Sad' },        { zh: '委屈', en: 'Wronged' },     { zh: '困惑', en: 'Confused' },
+          { zh: '悲傷', en: 'Heartbroken' }, { zh: '後悔', en: 'Regretful' },  { zh: '失望', en: 'Disappointed' },{ zh: '無聊', en: 'Bored' },
+          { zh: '絕望', en: 'Despairing' },  { zh: '沈重', en: 'Heavy' },      { zh: '孤單', en: 'Lonely' },      { zh: '疲倦', en: 'Fatigued' }
+        ]
+      },
+      green: {
+        name: '綠色區（低能量・舒服）',
+        shortName: '綠區',
+        colorHex: '#5ED382',
+        tileBg: 'bg-mood-green-light hover:bg-white',
+        tileText: 'text-stone-900',
+        tileSub: 'text-emerald-900/80',
+        badgeBg: 'bg-emerald-600 text-white',
+        emotions: [
+          { zh: '知足', en: 'Contented' },   { zh: '溫暖', en: 'Warm' },       { zh: '感恩', en: 'Grateful' },    { zh: '滿意', en: 'Satisfied' },
+          { zh: '害羞', en: 'Shy' },         { zh: '滿足', en: 'Fulfilled' },  { zh: '從容', en: 'Unhurried' },   { zh: '感動', en: 'Touched' },
+          { zh: '自在', en: 'At ease' },     { zh: '安全', en: 'Secure' },     { zh: '平衡', en: 'Balanced' },    { zh: '無憂', en: 'Carefree' },
+          { zh: '放鬆', en: 'Relaxed' },     { zh: '平靜', en: 'Calm' },       { zh: '舒服', en: 'Comfortable' }, { zh: '安心', en: 'Peaceful' }
+        ]
+      }
+    };
+
+    /**
+     * 應用程式狀態管理
+     */
+    const STORAGE_KEY = 'classroom_mood_meter_v1';
+    let state = {
+      history: [],        // 紀錄每一筆點擊 { quadrant, zh, en, time }
+      soundEnabled: true, // 是否開啟音效
+      showBadges: true    // 是否在情緒格子上顯示個別票數
+    };
+
+    let audioCtx = null;
+    let toastTimer = null;
+    let lastTapTime = 0;
+
+    /**
+     * 初始化應用程式
+     */
+    function init() {
+      // 顯示今日日期
+      const now = new Date();
+      const dateStr = now.toLocaleDateString('zh-TW', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        weekday: 'long'
+      });
+      document.getElementById('todayDate').textContent = dateStr;
+
+      // 從 localStorage 載入既有紀錄
+      loadState();
+
+      // 繪製 64 個情緒按鈕
+      renderMoodGrids();
+
+      // 更新統計與介面狀態
+      updateUI();
+    }
+
+    /**
+     * 讀取與儲存 localStorage（具備錯誤處理）
+     */
+    function loadState() {
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed.history)) state.history = parsed.history;
+          if (typeof parsed.soundEnabled === 'boolean') state.soundEnabled = parsed.soundEnabled;
+          if (typeof parsed.showBadges === 'boolean') state.showBadges = parsed.showBadges;
+        }
+      } catch (err) {
+        console.warn('讀取本機儲存失敗，將使用預設狀態：', err);
+      }
+    }
+
+    function saveState() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      } catch (err) {
+        console.warn('儲存至本機失敗：', err);
+      }
+    }
+
+    /**
+     * 繪製四個象限的 4x4 情緒按鈕
+     */
+    function renderMoodGrids() {
+      Object.keys(MOOD_DATA).forEach((quadKey) => {
+        const quad = MOOD_DATA[quadKey];
+        const container = document.getElementById(`grid-${quadKey}`);
+        container.innerHTML = '';
+
+        quad.emotions.forEach((emo, index) => {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.id = `tile-${quadKey}-${index}`;
+          btn.className = `
+            relative group flex flex-col items-center justify-center
+            py-2.5 sm:py-3.5 px-1 rounded-xl sm:rounded-2xl
+            ${quad.tileBg} border border-black/5 shadow-sm
+            hover:shadow-md active:scale-95 transition-all duration-150
+            min-h-[62px] sm:min-h-[76px] focus:outline-none focus:ring-2 focus:ring-stone-800/30
+          `;
+          btn.innerHTML = `
+            <span class="text-base sm:text-xl font-black ${quad.tileText} leading-tight tracking-wide">${emo.zh}</span>
+            <span class="text-[10px] sm:text-xs font-medium ${quad.tileSub} mt-0.5 leading-none truncate max-w-full px-0.5">${emo.en}</span>
+            <span id="badge-${quadKey}-${index}" class="hidden absolute -top-1.5 -right-1.5 min-w-[22px] h-[22px] px-1 rounded-full ${quad.badgeBg} text-[11px] font-black shadow flex items-center justify-center border-2 border-white">0</span>
+          `;
+
+          btn.addEventListener('click', (e) => handleEmotionClick(quadKey, index, emo, btn, e));
+          container.appendChild(btn);
+        });
+      });
+    }
+
+    /**
+     * 處理小朋友點擊情緒格的事件
+     */
+    function handleEmotionClick(quadKey, index, emo, btnEl, event) {
+      // 防止大螢幕觸控誤觸連點（220ms 防抖）
+      const now = Date.now();
+      if (now - lastTapTime < 220) return;
+      lastTapTime = now;
+
+      // 新增紀錄
+      state.history.push({
+        quadrant: quadKey,
+        index: index,
+        zh: emo.zh,
+        en: emo.en,
+        time: new Date().toISOString()
+      });
+
+      saveState();
+      updateUI();
+
+      // 播放點擊動畫
+      btnEl.classList.remove('animate-pop');
+      void btnEl.offsetWidth; // 觸發重繪
+      btnEl.classList.add('animate-pop');
+
+      // 播放溫和音效
+      if (state.soundEnabled) {
+        playGentleChime(quadKey);
+      }
+
+      // 飄浮 +1 特效
+      spawnFloatingPlus(event, btnEl, MOOD_DATA[quadKey].colorHex);
+
+      // 顯示暖心接納提示
+      const warmMessages = {
+        red: `謝謝你誠實表達「${emo.zh}」，我們一起深呼吸～`,
+        yellow: `太棒了！感受到了你的「${emo.zh}」能量！`,
+        blue: `抱抱你，謝謝你分享「${emo.zh}」的心情。`,
+        green: `好舒服的狀態！享受這份「${emo.zh}」吧！`
+      };
+      const emojis = { red: '🔥', yellow: '☀️', blue: '💧', green: '🌿' };
+      showToast(emojis[quadKey], warmMessages[quadKey], MOOD_DATA[quadKey].colorHex);
+    }
+
+    /**
+     * 產生飄浮 +1 視覺特效
+     */
+    function spawnFloatingPlus(event, btnEl, colorHex) {
+      const rect = btnEl.getBoundingClientRect();
+      const x = event.clientX || (rect.left + rect.width / 2);
+      const y = event.clientY || (rect.top + rect.height / 2);
+
+      const el = document.createElement('div');
+      el.className = 'float-plus';
+      el.textContent = '+1';
+      el.style.left = `${x}px`;
+      el.style.top = `${y - 10}px`;
+      el.style.color = colorHex;
+      document.body.appendChild(el);
+
+      setTimeout(() => el.remove(), 760);
+    }
+
+    /**
+     * 使用 Web Audio API 合成悅耳溫和的木琴點擊聲（無須外部音檔）
+     */
+    function playGentleChime(quadKey) {
+      try {
+        if (!audioCtx) {
+          const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+          audioCtx = new AudioContextClass();
+        }
+        if (audioCtx.state === 'suspended') {
+          audioCtx.resume();
+        }
+
+        // 四色象限對應不同和弦音高，讓聽覺也有區分
+        const freqMap = {
+          red: 392.00,    // G4
+          yellow: 587.33, // D5
+          blue: 329.63,   // E4
+          green: 523.25   // C5
+        };
+
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freqMap[quadKey] || 440, audioCtx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime((freqMap[quadKey] || 440) * 1.15, audioCtx.currentTime + 0.08);
+
+        gain.gain.setValueAtTime(0.001, audioCtx.currentTime);
+        gain.gain.linearRampToValueAtTime(0.18, audioCtx.currentTime + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.28);
+
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.3);
+      } catch (e) {
+        // 忽略不支援音訊的環境錯誤
+      }
+    }
+
+    /**
+     * 計算目前統計數據
+     */
+    function computeStats() {
+      const quadCounts = { red: 0, yellow: 0, blue: 0, green: 0 };
+      const emotionCounts = {}; // key: `${quadrant}-${index}`
+
+      state.history.forEach((item) => {
+        if (quadCounts[item.quadrant] !== undefined) {
+          quadCounts[item.quadrant]++;
+        }
+        const key = `${item.quadrant}-${item.index}`;
+        if (!emotionCounts[key]) {
+          emotionCounts[key] = {
+            quadrant: item.quadrant,
+            index: item.index,
+            zh: item.zh,
+            en: item.en,
+            count: 0
+          };
+        }
+        emotionCounts[key].count++;
+      });
+
+      const total = state.history.length;
+      const sortedEmotions = Object.values(emotionCounts).sort((a, b) => b.count - a.count);
+
+      return { total, quadCounts, emotionCounts, sortedEmotions };
+    }
+
+    /**
+     * 更新全畫面統計長條圖、格上票數與按鈕狀態
+     */
+    function updateUI() {
+      const { total, quadCounts, emotionCounts, sortedEmotions } = computeStats();
+
+      // 1. 更新總人次與復原按鈕
+      document.getElementById('totalCountDisplay').textContent = total;
+      document.getElementById('btnUndo').disabled = total === 0;
+
+      // 2. 更新工具列圖示狀態
+      document.getElementById('soundIcon').textContent = state.soundEnabled ? '🔊' : '🔇';
+      document.getElementById('badgeToggleIcon').textContent = state.showBadges ? '👁️' : '🙈';
+
+      // 3. 更新四象限長條圖與標題人次
+      const maxQuad = Math.max(1, quadCounts.red, quadCounts.yellow, quadCounts.blue, quadCounts.green);
+      ['red', 'yellow', 'blue', 'green'].forEach((q) => {
+        const count = quadCounts[q];
+        const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+        // 高度以最高柱狀為基準（最高 100%），讓對比在大螢幕上最清楚
+        const barHeightPct = total > 0 ? Math.max(count > 0 ? 8 : 0, Math.round((count / maxQuad) * 100)) : 0;
+
+        document.getElementById(`quadBadge-${q}`).textContent = `${count} 人`;
+        document.getElementById(`barVal-${q}`).textContent = count;
+        document.getElementById(`barPct-${q}`).textContent = `${pct}%`;
+        document.getElementById(`barFill-${q}`).style.height = `${barHeightPct}%`;
+      });
+
+      // 4. 更新每個情緒格上的小圓點票數
+      Object.keys(MOOD_DATA).forEach((q) => {
+        MOOD_DATA[q].emotions.forEach((_, idx) => {
+          const badge = document.getElementById(`badge-${q}-${idx}`);
+          const rec = emotionCounts[`${q}-${idx}`];
+          const c = rec ? rec.count : 0;
+          if (state.showBadges && c > 0) {
+            badge.textContent = c;
+            badge.classList.remove('hidden');
+          } else {
+            badge.classList.add('hidden');
+          }
+        });
+      });
+
+      // 5. 更新右側「目前最多小朋友選擇的心情」Top 3
+      const previewEl = document.getElementById('topEmotionsPreview');
+      if (sortedEmotions.length === 0) {
+        previewEl.innerHTML = `<span class="text-sm text-stone-400 italic">尚未有小朋友點選，快來打卡吧！</span>`;
+      } else {
+        const pillColors = {
+          red: 'bg-rose-100 text-rose-800 border-rose-200',
+          yellow: 'bg-amber-100 text-amber-900 border-amber-200',
+          blue: 'bg-blue-100 text-blue-800 border-blue-200',
+          green: 'bg-emerald-100 text-emerald-900 border-emerald-200'
+        };
+        previewEl.innerHTML = sortedEmotions.slice(0, 4).map((emo, i) => `
+          <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-bold border ${pillColors[emo.quadrant]}">
+            <span>${i === 0 ? '👑' : '•'}</span>
+            <span>${emo.zh}</span>
+            <span class="text-xs opacity-75">(${emo.count})</span>
+          </span>
+        `).join('');
+      }
+    }
+
+    /**
+     * 顯示底部溫和提示
+     */
+    function showToast(emoji, text, borderColor = '#F59E0B') {
+      const banner = document.getElementById('toastBanner');
+      const inner = document.getElementById('toastInner');
+      document.getElementById('toastEmoji').textContent = emoji;
+      document.getElementById('toastText').textContent = text;
+      inner.style.borderColor = borderColor;
+
+      banner.classList.remove('opacity-0', 'translate-y-4');
+      banner.classList.add('opacity-100', 'translate-y-0');
+
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => {
+        banner.classList.add('opacity-0', 'translate-y-4');
+        banner.classList.remove('opacity-100', 'translate-y-0');
+      }, 2200);
+    }
+
+    /**
+     * 工具列功能：音效、顯示票數、復原、全螢幕
+     */
+    function toggleSound() {
+      state.soundEnabled = !state.soundEnabled;
+      saveState();
+      updateUI();
+      showToast(state.soundEnabled ? '🔊' : '🔇', state.soundEnabled ? '已開啟點擊音效' : '已靜音');
+    }
+
+    function toggleBadges() {
+      state.showBadges = !state.showBadges;
+      saveState();
+      updateUI();
+      showToast(state.showBadges ? '👁️' : '🙈', state.showBadges ? '已顯示格上票數' : '已隱藏格上票數（避免從眾效應）');
+    }
+
+    function undoLast() {
+      if (state.history.length === 0) return;
+      const removed = state.history.pop();
+      saveState();
+      updateUI();
+      showToast('↩️', `已復原上一筆：「${removed.zh}」`, '#78716C');
+    }
+
+    function toggleFullscreen() {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(() => {
+          showToast('ℹ️', '瀏覽器目前無法切換全螢幕');
+        });
+      } else {
+        document.exitFullscreen().catch(() => {});
+      }
+    }
+
+    /**
+     * 清空資料彈窗控制
+     */
+    function openResetModal() {
+      document.getElementById('resetCountHint').textContent = state.history.length;
+      const modal = document.getElementById('resetModal');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+
+    function closeResetModal() {
+      const modal = document.getElementById('resetModal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+
+    function confirmReset() {
+      state.history = [];
+      saveState();
+      updateUI();
+      closeResetModal();
+      showToast('✨', '已清空所有紀錄，準備迎接新的一天！', '#10B981');
+    }
+
+    /**
+     * 班級整體綜合報告生成邏輯
+     */
+    let latestPlainTextReport = '';
+
+    function openReportModal() {
+      const stats = computeStats();
+      const body = document.getElementById('reportBody');
+      const nowStr = new Date().toLocaleString('zh-TW', {
+        year: 'numeric', month: 'long', day: 'numeric',
+        weekday: 'short', hour: '2-digit', minute: '2-digit'
+      });
+      document.getElementById('reportTimestamp').textContent = `統計時間：${nowStr} ｜ 總計 ${stats.total} 人次參與`;
+
+      if (stats.total === 0) {
+        body.innerHTML = `
+          <div class="text-center py-12">
+            <div class="text-5xl mb-3">🌱</div>
+            <h3 class="text-lg font-black text-stone-700 mb-1">目前還沒有打卡紀錄喔！</h3>
+            <p class="text-sm text-stone-500">請先邀請小朋友上台點選情緒量表，再來查看班級綜合報告。</p>
+          </div>
+        `;
+        latestPlainTextReport = '【班級情緒綜合報告】目前尚無打卡紀錄。';
+      } else {
+        const { total, quadCounts, sortedEmotions } = stats;
+        const pct = {
+          red: Math.round((quadCounts.red / total) * 100),
+          yellow: Math.round((quadCounts.yellow / total) * 100),
+          blue: Math.round((quadCounts.blue / total) * 100),
+          green: Math.round((quadCounts.green / total) * 100),
+        };
+
+        const highEnergyPct = Math.round(((quadCounts.red + quadCounts.yellow) / total) * 100);
+        const lowEnergyPct = 100 - highEnergyPct;
+        const pleasantPct = Math.round(((quadCounts.yellow + quadCounts.green) / total) * 100);
+        const unpleasantPct = 100 - pleasantPct;
+
+        // 找出主要象限
+        const orderedQuads = [
+          { key: 'yellow', count: quadCounts.yellow },
+          { key: 'green', count: quadCounts.green },
+          { key: 'blue', count: quadCounts.blue },
+          { key: 'red', count: quadCounts.red }
+        ].sort((a, b) => b.count - a.count);
+
+        const dominant = orderedQuads[0].key;
+        const weatherProfile = getClassroomWeatherProfile(dominant, pct, highEnergyPct, unpleasantPct);
+
+        // 組裝 HTML 報告
+        body.innerHTML = `
+          <!-- 1. 班級情緒氣象總評 -->
+          <div class="rounded-2xl p-5 border-2 ${weatherProfile.cardClass}">
+            <div class="flex flex-col sm:flex-row sm:items-center gap-4">
+              <div class="text-5xl shrink-0">${weatherProfile.icon}</div>
+              <div>
+                <div class="text-xs font-bold uppercase tracking-wider opacity-75 mb-0.5">今日班級情緒氣象</div>
+                <h3 class="text-xl sm:text-2xl font-black mb-1">${weatherProfile.title}</h3>
+                <p class="text-sm leading-relaxed opacity-90">${weatherProfile.summary}</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- 2. 四色象限分布詳情 -->
+          <div>
+            <h4 class="text-sm font-black text-stone-700 mb-3 flex items-center gap-1.5">
+              <span>📊</span> 四色區塊分布統計（總計 ${total} 人次）
+            </h4>
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div class="rounded-2xl bg-rose-50 border border-rose-200 p-3.5 text-center">
+                <div class="text-xs font-bold text-rose-700">紅區・高能不舒服</div>
+                <div class="text-2xl font-black text-rose-600 my-1">${quadCounts.red} <span class="text-xs font-bold">人</span></div>
+                <div class="text-xs font-bold text-rose-800/70">${pct.red}%</div>
+              </div>
+              <div class="rounded-2xl bg-amber-50 border border-amber-200 p-3.5 text-center">
+                <div class="text-xs font-bold text-amber-800">黃區・高能舒服</div>
+                <div class="text-2xl font-black text-amber-600 my-1">${quadCounts.yellow} <span class="text-xs font-bold">人</span></div>
+                <div class="text-xs font-bold text-amber-900/70">${pct.yellow}%</div>
+              </div>
+              <div class="rounded-2xl bg-blue-50 border border-blue-200 p-3.5 text-center">
+                <div class="text-xs font-bold text-blue-700">藍區・低能不舒服</div>
+                <div class="text-2xl font-black text-blue-600 my-1">${quadCounts.blue} <span class="text-xs font-bold">人</span></div>
+                <div class="text-xs font-bold text-blue-800/70">${pct.blue}%</div>
+              </div>
+              <div class="rounded-2xl bg-emerald-50 border border-emerald-200 p-3.5 text-center">
+                <div class="text-xs font-bold text-emerald-700">綠區・低能舒服</div>
+                <div class="text-2xl font-black text-emerald-600 my-1">${quadCounts.green} <span class="text-xs font-bold">人</span></div>
+                <div class="text-xs font-bold text-emerald-800/70">${pct.green}%</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 3. 能量與舒適度雙軸平衡 -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div class="bg-cream rounded-2xl p-4 border border-amber-100">
+              <div class="flex justify-between text-xs font-bold text-stone-600 mb-1.5">
+                <span>⚡ 高能量 ${highEnergyPct}%</span>
+                <span>🌙 低能量 ${lowEnergyPct}%</span>
+              </div>
+              <div class="h-3.5 w-full bg-sky-200 rounded-full overflow-hidden flex">
+                <div class="bg-amber-400 h-full transition-all" style="width: ${highEnergyPct}%"></div>
+                <div class="bg-sky-500 h-full transition-all" style="width: ${lowEnergyPct}%"></div>
+              </div>
+              <p class="text-xs text-stone-500 mt-2">
+                ${highEnergyPct >= 60 ? '全班整體能量偏高，適合互動討論或先做短暫收心活動。' : (lowEnergyPct >= 60 ? '全班整體能量偏低，適合輕柔暖身、伸展或靜態專注任務。' : '全班高低能量分布相當均衡，節奏容易掌握。')}
+              </p>
+            </div>
+
+            <div class="bg-cream rounded-2xl p-4 border border-amber-100">
+              <div class="flex justify-between text-xs font-bold text-stone-600 mb-1.5">
+                <span>😊 舒服區 ${pleasantPct}%</span>
+                <span>🌧️ 不舒服區 ${unpleasantPct}%</span>
+              </div>
+              <div class="h-3.5 w-full bg-purple-200 rounded-full overflow-hidden flex">
+                <div class="bg-emerald-400 h-full transition-all" style="width: ${pleasantPct}%"></div>
+                <div class="bg-purple-500 h-full transition-all" style="width: ${unpleasantPct}%"></div>
+              </div>
+              <p class="text-xs text-stone-500 mt-2">
+                ${unpleasantPct >= 40 ? '有較多孩子處於不舒服情緒，建議先花 3 分鐘同理與傾聽。' : '多數孩子感到舒服正向，是建立班級凝聚力的好時機。'}
+              </p>
+            </div>
+          </div>
+
+          <!-- 4. 最常被選中的情緒 Top 5 -->
+          <div>
+            <h4 class="text-sm font-black text-stone-700 mb-2.5 flex items-center gap-1.5">
+              <span>🏆</span> 班上最常見的心情詞彙（前 5 名）
+            </h4>
+            <div class="flex flex-wrap gap-2">
+              ${sortedEmotions.slice(0, 5).map((e, idx) => `
+                <div class="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white border border-stone-200 shadow-sm">
+                  <span class="w-5 h-5 rounded-full text-xs font-black flex items-center justify-center text-white" style="background-color: ${MOOD_DATA[e.quadrant].colorHex}">${idx + 1}</span>
+                  <span class="font-black text-stone-800">${e.zh}</span>
+                  <span class="text-xs text-stone-400">${e.en}</span>
+                  <span class="text-xs font-bold px-2 py-0.5 rounded-full bg-stone-100 text-stone-700">${e.count} 人</span>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+
+          <!-- 5. 班級經營引導建議（呼應 RULER：辨識、理解、表達、調節） -->
+          <div class="bg-amber-50/70 rounded-2xl p-5 border border-amber-200">
+            <h4 class="text-base font-black text-amber-950 mb-3 flex items-center gap-2">
+              <span>💡</span> 老師的班級經營與情緒調節建議
+            </h4>
+            <ul class="space-y-2.5 text-sm text-stone-700">
+              ${weatherProfile.tips.map(tip => `
+                <li class="flex items-start gap-2">
+                  <span class="text-amber-600 font-black mt-0.5">✓</span>
+                  <span class="leading-relaxed">${tip}</span>
+                </li>
+              `).join('')}
+            </ul>
+          </div>
+        `;
+
+        // 同步產生純文字版本供老師複製貼到班級日誌或親師溝通
+        const topStr = sortedEmotions.slice(0, 5).map(e => `${e.zh}(${e.count}人)`).join('、');
+        latestPlainTextReport = [
+          `【班級情緒氣象站 — 整體綜合報告】`,
+          `統計時間：${nowStr}`,
+          `參與人次：${total} 人次`,
+          `今日氣象：${weatherProfile.title}`,
+          `四色分布：紅區 ${quadCounts.red}人(${pct.red}%)｜黃區 ${quadCounts.yellow}人(${pct.yellow}%)｜藍區 ${quadCounts.blue}人(${pct.blue}%)｜綠區 ${quadCounts.green}人(${pct.green}%)`,
+          `能量與舒適度：高能量 ${highEnergyPct}% / 低能量 ${lowEnergyPct}%；舒服 ${pleasantPct}% / 不舒服 ${unpleasantPct}%`,
+          `熱門心情：${topStr}`,
+          `引導建議：`,
+          ...weatherProfile.tips.map((t, i) => `${i + 1}. ${t}`)
+        ].join('\n');
+      }
+
+      const modal = document.getElementById('reportModal');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+
+    /**
+     * 根據班級四色分布產生對應的氣象描述與教學建議
+     */
+    function getClassroomWeatherProfile(dominant, pct, highEnergyPct, unpleasantPct) {
+      const profiles = {
+        yellow: {
+          icon: '☀️',
+          title: '陽光活力晴天（黃區為主）',
+          cardClass: 'bg-amber-50 border-amber-300 text-amber-950',
+          summary: `班上洋溢著正向且充滿活力的氛圍！有 ${pct.yellow}% 的孩子處於高能量且舒服的狀態，非常適合進行腦力激盪、分組合作與發表分享。`,
+          tips: [
+            '順勢引導：先讓孩子用 1 分鐘跟身旁同學分享「今天為什麼這麼開心／期待」，把正向能量擴散出去。',
+            '聚焦任務：高能量時容易興奮分心，老師可清楚說明接下來的學習目標，將熱情導向創意討論或小組活動。',
+            unpleasantPct > 0 ? `溫柔關照：同時留意仍有 ${unpleasantPct}% 處於紅／藍區的孩子，邀請全班用友善的態度彼此陪伴。` : '正向肯定：稱讚孩子們展現出的好精神，一起開啟今天的學習旅程！'
+          ]
+        },
+        green: {
+          icon: '🌿',
+          title: '微風徐徐舒適天（綠區為主）',
+          cardClass: 'bg-emerald-50 border-emerald-300 text-emerald-950',
+          summary: `班級整體平靜、安全且安定！有 ${pct.green}% 的孩子處於低能量且舒服的狀態，這是非常適合深度閱讀、獨立思考與專注學習的黃金氣候。`,
+          tips: [
+            '把握黃金專注期：適合安排需要靜心思考的課程、閱讀、書寫或細膩的創作任務。',
+            '深化感恩練習：可以邀請 1～2 位孩子分享「是什麼讓自己今天覺得安心或舒服」。',
+            unpleasantPct > 0 ? `同理支持：利用班上安穩的氛圍，私下或輕聲關心在紅區（${pct.red}%）與藍區（${pct.blue}%）的同學。` : '維持步調：老師語氣保持溫和從容，讓這份舒服的學習節奏延續下去。'
+          ]
+        },
+        blue: {
+          icon: '🌧️',
+          title: '需要暖陽的微雨天（藍區為主）',
+          cardClass: 'bg-blue-50 border-blue-300 text-blue-950',
+          summary: `班上有較多孩子感到疲倦、難過或提不起勁（藍區佔 ${pct.blue}%）。這代表大家可能需要一點溫暖的陪伴與輕度的身體喚醒。`,
+          tips: [
+            '先同理、再啟動：告訴孩子「覺得累、無聊或難過都是很正常的，謝謝大家誠實說出來」。',
+            '輕量暖身操：帶領全班起立伸懶腰、深呼吸或拍拍肩膀 1 分鐘，溫和地把身體能量稍微拉高。',
+            '降低起步門檻：接下來的課程可先從簡單、有成就感的小任務開始，並在課間多給予口頭鼓勵。'
+          ]
+        },
+        red: {
+          icon: '⚡',
+          title: '需要降溫的雷陣雨（紅區為主）',
+          cardClass: 'bg-rose-50 border-rose-300 text-rose-950',
+          summary: `目前班上緊張、煩躁或焦慮的能量偏高（紅區佔 ${pct.red}%）。這常出現在考試前、剛發生衝突或行程緊湊時，建議先幫全班「踩煞車、降降溫」。`,
+          tips: [
+            '集體深呼吸（4-4-6 呼吸法）：帶領全班閉眼或低頭，吸氣 4 秒、停 4 秒、慢慢吐氣 6 秒，重複 3 次幫助神經系統安定。',
+            '看見情緒背後的需求：溫和詢問「是不是對接下來的活動感到緊張或擔心？」，讓壓力被說出來就能減半。',
+            '建立安全界線：先暫緩高壓競爭活動，改用明確、穩定的指令帶領大家一步一步完成眼前的事。'
+          ]
+        }
+      };
+
+      return profiles[dominant] || profiles.green;
+    }
+
+    function closeReportModal() {
+      const modal = document.getElementById('reportModal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+
+    /**
+     * 複製報告純文字（使用相容性最高的 execCommand 備援）
+     */
+    function copyReportText() {
+      if (!latestPlainTextReport) return;
+      try {
+        const textarea = document.createElement('textarea');
+        textarea.value = latestPlainTextReport;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+        showToast('📋', '已複製班級綜合報告文字！', '#10B981');
+      } catch (err) {
+        showToast('⚠️', '複製失敗，請手動選取文字複製');
+      }
+    }
+
+    // 點擊彈窗背景關閉
+    document.getElementById('reportModal').addEventListener('click', (e) => {
+      if (e.target.id === 'reportModal') closeReportModal();
+    });
+    document.getElementById('resetModal').addEventListener('click', (e) => {
+      if (e.target.id === 'resetModal') closeResetModal();
+    });
+
+    // 啟動應用
+    window.addEventListener('DOMContentLoaded', init);
+  </script>
+</body>
+</html>
